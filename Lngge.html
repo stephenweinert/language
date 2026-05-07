@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Go/No-Go Reading Task</title>
+  <style>
+    body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: black; color: white; touch-action: manipulation; }
+    #experiment-container { text-align: center; max-width: 800px; padding: 20px; }
+    .hidden { display: none; }
+    .stimulus { font-size: 36px; font-weight: bold; line-height: 1.4; }
+    
+    /* Styling for the ID input screen */
+    input[type="text"] { font-size: 18px; padding: 10px; margin: 15px 0; text-align: center; width: 250px; }
+    button { font-size: 18px; padding: 10px 20px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 5px; }
+    button:hover { background-color: #45a049; }
+    .muted-text { color: #aaaaaa; font-size: 14px; }
+
+    /* New TAP HERE button for touch screens */
+    #tap-btn {
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: #333;
+        color: white;
+        border: 2px solid white;
+        border-radius: 10px;
+        padding: 15px 40px;
+        font-size: 24px;
+        font-weight: bold;
+        cursor: pointer;
+        z-index: 1000;
+        user-select: none;
+    }
+    #tap-btn:active { background-color: #555; }
+  </style>
+</head>
+<body>
+  <div id="experiment-container">
+    
+    <!-- Participant ID Screen -->
+    <div id="id-screen">
+      <h2>Welcome to the Reading Task</h2>
+      <p>Please enter your participant code below:</p>
+      <p class="muted-text"><em>First two letters of your first name - followed by your birthday and year.</em></p>
+      <p class="muted-text"><em>(For example: <strong>ST062970</strong>)</em></p>
+      <input type="text" id="participant-id" placeholder="Enter Code Here">
+      <br>
+      <button id="start-btn">Submit & Continue</button>
+    </div>
+
+    <!-- Instructions injected via JavaScript -->
+    <div id="instructions" class="hidden"></div>
+    
+    <div id="stimulus" class="hidden stimulus"></div>
+    <div id="feedback" class="hidden stimulus" style="color: red; font-size: 24px; margin-top: 20px;"></div>
+  </div>
+
+  <!-- Persistent Touch Button -->
+  <div id="tap-btn" class="hidden">TAP HERE</div>
+
+  <script>
+    // --- Timing Rules ---
+    const maxWaitTime = 4000; 
+    const errorFeedbackTime = 2000; 
+
+    function getRandomITI() {
+        return Math.floor(Math.random() * 1500) + 1250; 
+    }
+
+    // --- Sentences (30 of each to guarantee no repeats) ---
+    const literalSentences = [
+      "The square has four equal sides.",
+      "Water freezes at zero degrees Celsius.",
+      "Oxygen is an element on the periodic table.",
+      "The cat is sitting on the red mat.",
+      "The sun rises in the east.",
+      "Tokyo is the capital city of Japan.",
+      "An equilateral triangle has three 60-degree angles.",
+      "Mammals are warm-blooded vertebrates.",
+      "The book is three hundred pages long.",
+      "The stoplight turned from green to yellow.",
+      "A week has seven days.",
+      "The planet Earth orbits the sun.",
+      "A hexagon is a polygon with six sides.",
+      "Paris is a city in France.",
+      "Ice is the solid form of water.",
+      "A bicycle has two wheels.",
+      "The human skeleton is made of bones.",
+      "Wood comes from the trunks of trees.",
+      "Fish breathe underwater using gills.",
+      "The alphabet starts with the letter A.",
+      "A thermometer is used to measure temperature.",
+      "Gravity pulls objects toward the ground.",
+      "An adult human typically has thirty-two teeth.",
+      "A piano is a musical instrument with keys.",
+      "An hour contains sixty minutes.",
+      "A kilometer is equal to one thousand meters.",
+      "Birds have feathers and lay eggs.",
+      "A triangle has three straight edges.",
+      "A standard guitar has six strings.",
+      "The freezing point of water is thirty-two degrees Fahrenheit."
+    ];
+
+    const ambiguousSentences = [
+ const ambiguousSentences = [
+      "The objct is by the bnk.",
+      "I saw the mn with the telscope.",
+      "She has a led on the cais.",
+      "The wnd was too strong to wind the sal.",
+      "He didn't like the prdc the frm would produce.",
+      "Can you help me present the prsnt?",
+      "The bndg was wound around the wnd.",
+      "I need to desert my pst to find some dssrt.",
+      "We must polish the Polish frnitur.",
+      "The dmp was so full that it had to refuse more rfs.",
+      "He tied a bw on the boww of the shp.",
+      "The duv dove into the bushz.",
+      "I decided to record the new rcrd.",
+      "They were too close to the doore to close it.",
+      "The bck does funny thngs when the dze are present.",
+      "I did not object to the strange objct.",
+      "There was a rw among the orsm about how to row.",
+      "We had to subject the sbjct to a seris of tsts.",
+      "How can I intimate this to my most intimate frend?",
+      "He could lead the tm if he would get the ld out.",
+      "They will project the imge of the new prjct on the wl.",
+      "A tr rolled down her chk when she saw the taer in her drss.",
+      "The insurnc was invalid for the poor invld.",
+      "The artst will mold the cly to make a new mld.",
+      "She placed a minute spck of dst in the gls for a mnt.",
+      "You can console the boi playing on the gaming cnsl.",
+      "He was deliberate when he decided to deliberate the isse.",
+      "I left my bt next to the btt cv.",
+      "He struck a mtch to start the tnns mach.",
+      "The heavy ld pp was used to lead the wtr away."
+    ];
+
+    // --- Block Setup ---
+    const blocks = [
+      { name: 'Baseline', goCount: 5, nogoCount: 5 },
+      { name: 'Music', goCount: 10, nogoCount: 10 },
+      { name: 'Words', goCount: 10, nogoCount: 10 }
+    ];
+
+    let trialList = [];
+    let currentTrialIndex = 0;
+    let participantID = "Unknown";
+    
+    let results = [["ParticipantID", "Condition", "TrialType", "Sentence", "RT", "ErrorStatus"]]; 
+    
+    const idScreen = document.getElementById('id-screen');
+    const instructionsDiv = document.getElementById('instructions');
+    const stimulusDiv = document.getElementById('stimulus');
+    const feedbackDiv = document.getElementById('feedback');
+    const tapBtn = document.getElementById('tap-btn');
+    
+    let trialTimeout;
+    let stimulusStartTime;
+    let currentTrialType;
+    let currentConditionName;
+    let waitingForResponse = false;
+
+    document.getElementById('start-btn').addEventListener('click', () => {
+      const idInput = document.getElementById('participant-id').value.trim();
+      if (idInput === "") {
+        alert("Please enter your participant code to begin.");
+        return;
+      }
+      participantID = idInput;
+      idScreen.classList.add('hidden');
+      tapBtn.classList.remove('hidden'); 
+      initExperiment();
+    });
+
+    function shuffle(array) {
+        let currentIndex = array.length, randomIndex;
+        while (currentIndex !== 0) {
+            randomIndex = Math.floor(Math.random() * currentIndex);
+            currentIndex--;
+            [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+        }
+        return array;
+    }
+
+    // Setup the sequence of trials
+    function initExperiment() {
+      let literalPool = shuffle([...literalSentences]);
+      let ambiguousPool = shuffle([...ambiguousSentences]);
+
+      blocks.forEach(block => {
+        let blockTrials = [];
+        
+        for(let i=0; i<block.goCount; i++) {
+            let sentenceText = block.name === 'Words' ? ambiguousPool.pop() : literalPool.pop();
+            blockTrials.push({type: 'go', condition: block.name, text: sentenceText});
+        }
+        for(let i=0; i<block.nogoCount; i++) {
+            let sentenceText = block.name === 'Words' ? literalPool.pop() : ambiguousPool.pop();
+            blockTrials.push({type: 'nogo', condition: block.name, text: sentenceText});
+        }
+        
+        blockTrials = shuffle(blockTrials);
+        
+        trialList.push({type: 'pause', condition: block.name});
+        trialList = trialList.concat(blockTrials);
+      });
+      
+      document.addEventListener('keydown', handleKeydown);
+      tapBtn.addEventListener('touchstart', handleTouch, {passive: false});
+      tapBtn.addEventListener('mousedown', handleTouch); 
+      
+      startNextTrial(); 
+    }
+
+    function startNextTrial() {
+      if (currentTrialIndex >= trialList.length) {
+        endExperiment();
+        return;
+      }
+
+      let trialData = trialList[currentTrialIndex];
+      currentConditionName = trialData.condition;
+      
+      if (trialData.type === 'pause') {
+        showInstructions(`Get ready for the ${currentConditionName} condition.<br><br>Press SPACE (or tap the button) to begin.`, currentConditionName);
+        return;
+      }
+
+      currentTrialType = trialData.type;
+      setTimeout(showStimulus, getRandomITI());
+    }
+
+    function showInstructions(msg, condition) {
+      instructionsDiv.classList.remove('hidden');
+      
+      let goRule, nogoRule;
+      
+      if (condition === 'Words') {
+          goRule = "the sentence has <strong>multiple meanings or requires context</strong>";
+          nogoRule = "the sentence is a <strong>concrete, literal fact</strong>";
+      } else {
+          goRule = "the sentence is a <strong>concrete, literal fact</strong> (easy to understand)";
+          nogoRule = "the sentence has <strong>multiple meanings or requires context</strong>";
+      }
+
+      instructionsDiv.innerHTML = `
+        <h3 style="color: #ccc;">Task Rules:</h3>
+        <p>Press the <strong>SPACEBAR</strong> (or <strong>TAP THE BUTTON</strong>) if ${goRule}.</p>
+        <p>Do <strong>NOT</strong> press or tap anything if ${nogoRule}.</p>
+        <hr style="border: 1px solid #333; width: 60%; margin: 20px auto;">
+        <h2>${msg}</h2>`;
+      waitingForResponse = false; 
+    }
+
+    function showStimulus() {
+      instructionsDiv.classList.add('hidden');
+      feedbackDiv.classList.add('hidden');
+      stimulusDiv.classList.remove('hidden');
+      
+      stimulusDiv.innerText = trialList[currentTrialIndex].text;
+      
+      stimulusStartTime = performance.now();
+      waitingForResponse = true;
+      trialTimeout = setTimeout(handleTimeout, maxWaitTime);
+    }
+
+    function registerResponse() {
+        if (trialList[currentTrialIndex] && trialList[currentTrialIndex].type === 'pause') {
+            currentTrialIndex++;
+            instructionsDiv.classList.add('hidden');
+            startNextTrial();
+            return;
+        }
+
+        if (waitingForResponse) {
+          clearTimeout(trialTimeout);
+          let rt = Math.round(performance.now() - stimulusStartTime);
+          processResponse(rt, true);
+        }
+    }
+
+    function handleKeydown(e) {
+      if (e.code === 'Space') {
+        e.preventDefault(); 
+        registerResponse();
+      }
+    }
+
+    function handleTouch(e) {
+      e.preventDefault(); 
+      registerResponse();
+    }
+
+    function handleTimeout() {
+      if (waitingForResponse) {
+        processResponse('TIMEOUT', false);
+      }
+    }
+
+    function processResponse(rt, spacePressed) {
+      waitingForResponse = false;
+      stimulusDiv.classList.add('hidden');
+      
+      let errorStatus = 0; 
+      let feedbackMsg = "";
+
+      if (currentTrialType === 'go') {
+        if (!spacePressed) {
+          errorStatus = 1;
+          feedbackMsg = currentConditionName === 'Words' ? "Missed! That sentence required context." : "Missed! That was a literal sentence."; 
+        }
+      } else if (currentTrialType === 'nogo') {
+        if (spacePressed) {
+          errorStatus = 1;
+          feedbackMsg = currentConditionName === 'Words' ? "False Alarm! That was a literal sentence." : "False Alarm! That sentence required context."; 
+        }
+      }
+
+      let safeSentence = '"' + trialList[currentTrialIndex].text + '"';
+      results.push([participantID, currentConditionName, currentTrialType, safeSentence, rt, errorStatus]);
+
+      if (errorStatus === 1) {
+        feedbackDiv.innerText = feedbackMsg;
+        feedbackDiv.classList.remove('hidden');
+        setTimeout(() => {
+          feedbackDiv.classList.add('hidden');
+          currentTrialIndex++;
+          startNextTrial();
+        }, errorFeedbackTime);
+      } else {
+        currentTrialIndex++;
+        startNextTrial();
+      }
+    }
+
+    // Send data to Google Doc/Form
+    function endExperiment() {
+      tapBtn.classList.add('hidden'); 
+      instructionsDiv.classList.remove('hidden');
+      instructionsDiv.innerHTML = "<h2>Experiment Complete!</h2><p>Sending your data to Google Docs...</p>";
+      
+      let csvContent = results.map(e => e.join(",")).join("\n");
+      
+      // --- GOOGLE FORM SETUP ---
+      // Replace these two variables with your specific form details
+      const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLScXdvWvwbuVkG0iSqodRFvZxmALzyySdEpb0-feuwHvaZsBLg/formResponse"; 
+      const entryId = "entry.51007509"; 
+      
+      let form = document.createElement("form");
+      form.action = formUrl;
+      form.method = "POST";
+      form.target = "hidden_iframe"; 
+      
+      let input = document.createElement("textarea");
+      input.name = entryId;
+      input.value = csvContent;
+      form.appendChild(input);
+      
+      let iframe = document.createElement("iframe");
+      iframe.name = "hidden_iframe";
+      iframe.style.display = "none";
+      document.body.appendChild(iframe);
+      
+      document.body.appendChild(form);
+      form.submit();
+
+      setTimeout(() => {
+        instructionsDiv.innerHTML = "<h2>Data Successfully Sent!</h2><p>Your results have been logged to the spreadsheet. You may now close this window.</p>";
+      }, 1500);
+    }
+  </script>
+</body>
+</html>
